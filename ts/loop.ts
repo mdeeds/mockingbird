@@ -21,14 +21,36 @@ export class Loop {
   // Buffer data
   private audioBuffer: AudioBuffer = null;
   private source: AudioBufferSourceNode = null;
-  private bodyS: number;
+  private bodyS: number = undefined;
 
   constructor(sampleSource: SampleSource) {
     this.sampleSource = sampleSource;
     this.audioCtx = sampleSource.audioCtx;
-    this.sampleSource.addListener((samples: Float32Array, endTimeS: number) => {
+    this.sampleSource.setListener((samples: Float32Array, endTimeS: number) => {
       this.handleSamples(samples, endTimeS);
     });
+  }
+
+  nextLoop(): Loop {
+    const result = new Loop(this.sampleSource);
+    for (const s of this.sampleList) {
+      result.rollSamples(s);
+    }
+    return result;
+  }
+
+  getBodyS() {
+    if (!this.bodyS) {
+      throw new Error("Loop is not complete.");
+    }
+    return this.bodyS;
+  }
+
+  getPlayLengthS() {
+    if (!this.bodyS) {
+      throw new Error("Loop is not complete.");
+    }
+    return this.bodyS + Loop.maxFooterS;
   }
 
   startRecording(timestamp: number) {
@@ -38,28 +60,23 @@ export class Loop {
     }
     this.recordUntil = Infinity;
     this.recordingStartS = timestamp;
-
-    // // If we start recording less then five seconds after the session start,
-    // // we don't compute the fill buffers correctly.  One solution is to add
-    // // something here, but it's more complicated than that.
-    // const silence = new Float32Array(Loop.maxHeaderS * this.audioCtx.sampleRate);
-    // this.sampleList.push(silence);
   }
 
   private fillFromSamples(sampleIndex: number) {
     const headerStartS = this.recordingStartS - Loop.maxHeaderS;
     // Offset into buffer measured in sample points to where this sample starts
-    let bufferStart = (this.sampleStartS - headerStartS) * this.audioCtx.sampleRate;
+    let bufferStart = Math.round((this.sampleStartS - headerStartS) * this.audioCtx.sampleRate);
     for (let i = 0; i < sampleIndex; ++i) {
       bufferStart += this.sampleList[i].length;
     }
-    const buffer = this.audioBuffer.getChannelData(0);
-    let m = 0;
-    const sample = this.sampleList[sampleIndex];
+    const buffer: Float32Array = this.audioBuffer.getChannelData(0);
+    const sample: Float32Array = this.sampleList[sampleIndex];
+    let numFilled = 0;
     for (let i = 0; i < sample.length; ++i) {
       const targetOffset = i + bufferStart;
       if (targetOffset >= 0 && targetOffset < buffer.length) {
         buffer[targetOffset] = sample[i];
+        ++numFilled;
       }
     }
   }
@@ -79,7 +96,8 @@ export class Loop {
     const loopLengthS = this.bodyS + Loop.maxHeaderS + Loop.maxFooterS;
     const loopLengthSamples = loopLengthS * this.audioCtx.sampleRate;
 
-    this.audioBuffer = this.audioCtx.createBuffer(1, loopLengthSamples, this.audioCtx.sampleRate);
+    this.audioBuffer = this.audioCtx.createBuffer(
+      1, loopLengthSamples, this.audioCtx.sampleRate);
     for (let i = 0; i < this.sampleList.length; ++i) {
       this.fillFromSamples(i);
     }
@@ -116,26 +134,30 @@ export class Loop {
     return m;
   }
 
+  private rollSamples(samples: Float32Array) {
+    // We have not started recording.  Keep a rolling buffer.
+    const samplesLengthS = samples.length / this.audioCtx.sampleRate;
+    this.sampleList.push(samples.slice());
+    this.sampleLengthS += samplesLengthS;
+    while (true) {
+      const firstBufferLengthS =
+        this.sampleList[0].length / this.audioCtx.sampleRate;
+      if (this.sampleLengthS - firstBufferLengthS < Loop.maxHeaderS) {
+        break;
+      }
+      this.sampleList.shift();
+      this.sampleLengthS -= firstBufferLengthS;
+      this.sampleStartS += firstBufferLengthS;
+    }
+  }
+
   private handleSamples(samples: Float32Array, endTimeS: number) {
-    const samplesLengthS =
-      this.sampleSource.audio.secondsFromSamples(samples.length);
+    const samplesLengthS = samples.length / this.audioCtx.sampleRate;
     if (!this.sampleStartS) {
       this.sampleStartS = endTimeS - samplesLengthS;
     }
     if (this.recordUntil === 0) {
-      // We have not started recording.  Keep a rolling buffer.
-      this.sampleList.push(samples.slice());
-      this.sampleLengthS += samplesLengthS;
-      while (true) {
-        const firstBufferLengthS = this.sampleSource.audio.secondsFromSamples(
-          this.sampleList[0].length);
-        if (this.sampleLengthS - firstBufferLengthS < Loop.maxHeaderS) {
-          break;
-        }
-        this.sampleList.shift();
-        this.sampleLengthS -= firstBufferLengthS;
-        this.sampleStartS += firstBufferLengthS;
-      }
+      this.rollSamples(samples);
     } else if (endTimeS < this.recordUntil) {
       // Recording has started.  Fill the samples as they arrive.
       this.sampleList.push(samples);

@@ -27,8 +27,4 @@ export class Audio {
   public static HzFromNote(note: number): number {
     return 440 * Math.pow(2, (note - 69) / 12)
   }
-
-  public secondsFromSamples(numSamples: number) {
-    return numSamples / this.audioCtx.sampleRate;
-  }
 }

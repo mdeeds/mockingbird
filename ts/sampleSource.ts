@@ -9,7 +9,7 @@ export class SampleSource {
   private mediaRecorder: MediaRecorder;
   private firstChunkSize: number = 0;
   private firstChunk: Blob = null;
-  private listeners: SampleCallback[] = [];
+  private listener: SampleCallback = null;
   readonly audioCtx: AudioContext;
   readonly audio: Audio;
 
@@ -35,8 +35,8 @@ export class SampleSource {
     });
   }
 
-  public addListener(callback: SampleCallback) {
-    this.listeners.push(callback);
+  public setListener(callback: SampleCallback) {
+    this.listener = callback;
   }
 
   private setUpAnalyser(mediaSource: MediaStreamAudioSourceNode) {
@@ -112,12 +112,14 @@ export class SampleSource {
           // TODO: Consider supporting stereo or more channels.
           let newSamples = decodedSamples.getChannelData(0)
             .slice(this.firstChunkSize, decodedSamples.length);
-          for (let f of this.listeners) {
-            setTimeout(() => { f(newSamples, chunkEndTime); }, 0);
+          if (this.listener && newSamples.length > 0) {
+            setTimeout(() => { this.listener(newSamples, chunkEndTime); }, 0);
           }
           if (this.firstChunkSize == 0) {
             this.firstChunkSize = decodedSamples.length;
           }
+        }, (er) => {
+          console.error(er);
         });
     };
 
