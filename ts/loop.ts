@@ -101,6 +101,7 @@ export class Loop {
     for (let i = 0; i < this.sampleList.length; ++i) {
       this.fillFromSamples(i);
     }
+    this.addCanvas();
   }
 
   startSample(timestamp: number) {
@@ -168,5 +169,44 @@ export class Loop {
     } else if (!this.isFinalized) {
       this.finalize();
     }
+  }
+
+  private addCanvas() {
+    const body = document.getElementsByTagName('body')[0];
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = 500;
+    canvas.height = 50;
+    body.appendChild(canvas);
+
+    const scale = 100;
+
+    let i = Math.round(Loop.maxHeaderS * this.audioCtx.sampleRate - 250 * scale);
+    ctx.fillStyle = 'blue';
+    ctx.strokeStyle = 'white';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.moveTo(0, 25);
+    const buffer = this.audioBuffer.getChannelData(0);
+    for (let x = 0; x < 500; ++x) {
+      ctx.lineTo(x, 25 + 25 * Math.pow(
+        Math.abs(buffer[i]), 0.5));
+      i += scale;
+    }
+    for (let x = 499; x >= 0; --x) {
+      ctx.lineTo(x, 25 - 25 * Math.pow(
+        Math.abs(buffer[i]), 0.5));
+      i -= scale;
+    }
+    ctx.lineTo(0, 25);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.strokeStyle = 'black';
+    ctx.beginPath();
+    ctx.moveTo(250, 0);
+    ctx.lineTo(250, 50);
+    ctx.stroke();
+
   }
 }
