@@ -21,7 +21,11 @@ export class Loop {
   // Buffer data
   private audioBuffer: AudioBuffer = null;
   private source: AudioBufferSourceNode = null;
+  private headerS: number = undefined;
   private bodyS: number = undefined;
+
+  // Visualization
+  private canvas: HTMLCanvasElement;
 
   constructor(sampleSource: SampleSource) {
     this.sampleSource = sampleSource;
@@ -51,6 +55,11 @@ export class Loop {
       throw new Error("Loop is not complete.");
     }
     return this.bodyS + Loop.maxFooterS;
+  }
+
+  adjustStartPoint(deltaS: number) {
+    this.headerS += deltaS;
+    this.renderCanvas();
   }
 
   startRecording(timestamp: number) {
@@ -93,6 +102,7 @@ export class Loop {
     // create the entire audio buffer and dump the tail samples into it as
     // they arrive. 
     this.bodyS = timestamp - this.recordingStartS;
+    this.headerS = Loop.maxHeaderS;
     const loopLengthS = this.bodyS + Loop.maxHeaderS + Loop.maxFooterS;
     const loopLengthSamples = loopLengthS * this.audioCtx.sampleRate;
 
@@ -110,10 +120,10 @@ export class Loop {
     this.source = this.audioCtx.createBufferSource();
     this.source.buffer = this.audioBuffer;
     this.source.connect(this.audioCtx.destination);
-    const determinant = (timestamp - Loop.maxHeaderS) - currentTime;
+    const determinant = (timestamp - this.headerS) - currentTime;
     if (determinant >= 0) {
       // Start is in the future.
-      this.source.start(timestamp - Loop.maxHeaderS);
+      this.source.start(timestamp - this.headerS);
     } else {
       // Start is in the past.
       this.source.start(currentTime, -determinant);
@@ -171,18 +181,13 @@ export class Loop {
     }
   }
 
-  private addCanvas() {
-    const pixelsPerSecond = 1000 / 16;
+  private renderCanvas() {
+    const pixelsPerSecond = 1000 / 8;
     const secondsPerPixel = 1 / pixelsPerSecond;
     const samplesPerPixel = this.audioCtx.sampleRate * secondsPerPixel;
 
-    const body = document.getElementsByTagName('body')[0];
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    canvas.width = 800;
-    canvas.height = 50;
-    body.appendChild(canvas);
-
+    const ctx = this.canvas.getContext('2d');
+    ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     ctx.fillStyle = 'blue';
     ctx.strokeStyle = 'white';
     ctx.lineWidth = 0.5;
@@ -190,16 +195,18 @@ export class Loop {
     ctx.moveTo(0, 25);
     const buffer = this.audioBuffer.getChannelData(0);
 
-    let i = Loop.maxHeaderS * this.audioCtx.sampleRate;
-    for (let x = 0; x < canvas.width; ++x) {
-      ctx.lineTo(x, 25 + 25 * Math.pow(
-        Math.abs(buffer[Math.round(i)]), 0.5));
-      i += samplesPerPixel;
-    }
-    for (let x = canvas.width - 1; x >= 0; --x) {
-      ctx.lineTo(x, 25 - 25 * Math.pow(
-        Math.abs(buffer[Math.round(i)]), 0.5));
-      i -= samplesPerPixel;
+    let i = Math.round(this.headerS * this.audioCtx.sampleRate);
+    let m = 0;
+    for (let x = 0; x < this.canvas.width; ++x) {
+      ctx.lineTo(x, 25 + 25 * m);
+      const nextI = i + samplesPerPixel;
+      m = 0;
+      while (i < nextI) {
+        m = Math.max(m,
+          Math.pow(
+            Math.abs(buffer[i]), 0.5));
+        ++i
+      }
     }
     ctx.lineTo(0, 25);
     ctx.fill();
@@ -211,6 +218,15 @@ export class Loop {
     ctx.moveTo(bodyEndX, 0);
     ctx.lineTo(bodyEndX, 50);
     ctx.stroke();
+  }
 
+  private addCanvas() {
+    const body = document.getElementsByTagName('body')[0];
+    this.canvas = document.createElement('canvas');
+    this.canvas.width = 800;
+    this.canvas.height = 50;
+    body.appendChild(this.canvas);
+
+    this.renderCanvas();
   }
 }
