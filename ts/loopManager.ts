@@ -24,18 +24,28 @@ export class LoopManager {
   private static scheduleAheadS: number = 1.5;
   private playingLoops: PlayingLoop[] = [];
 
+  // Rendering
+  private canvas: HTMLCanvasElement;
+
   constructor(audio: Audio) {
     this.audio = audio;
     this.audioCtx = audio.audioCtx;
+    this.canvas = document.createElement('canvas');
+    this.canvas.width = 100;
+    this.canvas.height = 100;
+    const body = document.getElementsByTagName('body')[0];
+    body.appendChild(this.canvas);
   }
 
   addLoop(loop: Loop) {
+    console.log(`Adding loop; playing: ${this.playingLoops.length}`);
     if (this.loops.length == 0) {
       this.setTempo(loop.getBodyS());
       this.startTimeS = this.audioCtx.currentTime;
       this.scheduledThroughS = this.audioCtx.currentTime;
       this.start(loop, this.startTimeS);
       this.schedule();
+      this.render();
     } else {
       this.startAtNearestDownbeat(loop);
     }
@@ -73,6 +83,35 @@ export class LoopManager {
     timestamp: number = this.audioCtx.currentTime) {
     const currentMeasureStart = this.getNearestDownbeat(timestamp);
     this.start(loop, currentMeasureStart);
+  }
+
+  private render() {
+    const ctx = this.canvas.getContext('2d');
+    ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    ctx.lineWidth = 8;
+    ctx.strokeStyle = '#393';
+
+    const now = this.audioCtx.currentTime;
+
+    const currentMeasureNumber = Math.trunc(
+      (now - this.startTimeS) / (this.beatLengthS * 4));
+    const currentMeasureStart =
+      this.startTimeS + currentMeasureNumber * (this.beatLengthS * 4);
+
+    const currentFloatBeat = now - currentMeasureStart;
+    const currentBeat = Math.trunc(currentFloatBeat) + 1;
+    const currentFracBeat = currentFloatBeat - currentBeat + 1;
+
+    const start = -Math.PI / 2;
+
+    ctx.beginPath();
+    ctx.arc(50, 50, 20, start, start + Math.PI * 2 * currentFracBeat);
+    ctx.stroke();
+
+    ctx.fillStyle = 'black';
+    ctx.fillText(currentBeat.toFixed(0), 20, 20);
+
+    requestAnimationFrame(() => { this.render(); });
   }
 
   private schedule() {

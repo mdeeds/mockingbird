@@ -23,6 +23,7 @@ export class Loop {
   private source: AudioBufferSourceNode = null;
   private headerS: number = undefined;
   private bodyS: number = undefined;
+  private offsetS: number = 0.0;
 
   // Visualization
   private canvas: HTMLCanvasElement;
@@ -59,6 +60,7 @@ export class Loop {
 
   adjustStartPoint(deltaS: number) {
     this.headerS += deltaS;
+    this.offsetS += deltaS;
     this.renderCanvas();
   }
 
@@ -218,6 +220,10 @@ export class Loop {
     ctx.moveTo(bodyEndX, 0);
     ctx.lineTo(bodyEndX, 50);
     ctx.stroke();
+
+    ctx.beginPath();
+    ctx.fillStyle = 'black';
+    ctx.fillText(`${(this.offsetS * 1000).toFixed(0)}ms`, 5, 20);
   }
 
   private addCanvas() {
