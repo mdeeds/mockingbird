@@ -1,8 +1,8 @@
 import { SampleSource } from "./sampleSource";
 
 export class Loop {
-  private static maxHeaderS: number = 5.0;
-  private static maxFooterS: number = 5.0;
+  private static maxHeaderS: number = 0.1;
+  private static maxFooterS: number = 0.1;
 
   readonly audioCtx: AudioContext;
   private sampleSource: SampleSource;
@@ -172,40 +172,44 @@ export class Loop {
   }
 
   private addCanvas() {
+    const pixelsPerSecond = 1000 / 16;
+    const secondsPerPixel = 1 / pixelsPerSecond;
+    const samplesPerPixel = this.audioCtx.sampleRate * secondsPerPixel;
+
     const body = document.getElementsByTagName('body')[0];
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
-    canvas.width = 500;
+    canvas.width = 800;
     canvas.height = 50;
     body.appendChild(canvas);
 
-    const scale = 100;
-
-    let i = Math.round(Loop.maxHeaderS * this.audioCtx.sampleRate - 250 * scale);
     ctx.fillStyle = 'blue';
     ctx.strokeStyle = 'white';
     ctx.lineWidth = 0.5;
     ctx.beginPath();
     ctx.moveTo(0, 25);
     const buffer = this.audioBuffer.getChannelData(0);
-    for (let x = 0; x < 500; ++x) {
+
+    let i = Loop.maxHeaderS * this.audioCtx.sampleRate;
+    for (let x = 0; x < canvas.width; ++x) {
       ctx.lineTo(x, 25 + 25 * Math.pow(
-        Math.abs(buffer[i]), 0.5));
-      i += scale;
+        Math.abs(buffer[Math.round(i)]), 0.5));
+      i += samplesPerPixel;
     }
-    for (let x = 499; x >= 0; --x) {
+    for (let x = canvas.width - 1; x >= 0; --x) {
       ctx.lineTo(x, 25 - 25 * Math.pow(
-        Math.abs(buffer[i]), 0.5));
-      i -= scale;
+        Math.abs(buffer[Math.round(i)]), 0.5));
+      i -= samplesPerPixel;
     }
     ctx.lineTo(0, 25);
     ctx.fill();
     ctx.stroke();
 
+    const bodyEndX = this.bodyS * pixelsPerSecond;
     ctx.strokeStyle = 'black';
     ctx.beginPath();
-    ctx.moveTo(250, 0);
-    ctx.lineTo(250, 50);
+    ctx.moveTo(bodyEndX, 0);
+    ctx.lineTo(bodyEndX, 50);
     ctx.stroke();
 
   }

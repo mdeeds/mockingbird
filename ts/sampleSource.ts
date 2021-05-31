@@ -47,17 +47,35 @@ export class SampleSource {
     body.appendChild(canvas);
     const ctx = canvas.getContext('2d');
 
-    const analyzer = this.audioCtx.createAnalyser();
-    analyzer.fftSize = 2048;
-    this.mediaSource.connect(analyzer);
-    const dataArray = new Float32Array(analyzer.frequencyBinCount);
+    const analyser = this.audioCtx.createAnalyser();
+    analyser.fftSize = 2048;
+    this.mediaSource.connect(analyser);
+    const dataArray = new Float32Array(analyser.frequencyBinCount);
     const render = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      analyzer.getFloatTimeDomainData(dataArray)
-      ctx.fillStyle = 'blue';
-      for (let i = 0; i < dataArray.length; i += 20) {
-        ctx.fillRect(i / 20, 50, 1, 1 + 50 * dataArray[i])
+      analyser.getFloatTimeDomainData(dataArray)
+      let m = 0;
+      let s = 0;
+      for (let i = 0; i < dataArray.length; ++i) {
+        const v = Math.pow(Math.abs(dataArray[i]), 0.3);
+        m = Math.max(m, v);
+        s += v;
       }
+      const thetaMax = Math.PI * m;
+      const thetaMean = Math.PI * s / dataArray.length;
+      const start = Math.PI / 2;
+      ctx.beginPath();
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = '#44f';
+      ctx.lineWidth = 25;
+      ctx.arc(50, 50, 30, start - thetaMean, start + thetaMean);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.strokeStyle = '#f48';
+      ctx.lineWidth = 5;
+      ctx.arc(50, 50, 30, start - thetaMax, start + thetaMax);
+      ctx.stroke();
+
       requestAnimationFrame(render);
     }
     requestAnimationFrame(render);
