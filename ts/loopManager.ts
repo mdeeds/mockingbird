@@ -72,8 +72,9 @@ export class LoopManager {
     if (!this.beatLengthS) {
       return timestamp;
     }
+    const elapsed = timestamp - this.startTimeS;
     const currentMeasureNumber = Math.round(
-      (timestamp - this.startTimeS) / (this.beatLengthS * 4));
+      elapsed / (this.beatLengthS * 4));
     const currentMeasureStart =
       this.startTimeS + currentMeasureNumber * (this.beatLengthS * 4);
     return currentMeasureStart;
@@ -91,25 +92,23 @@ export class LoopManager {
     ctx.lineWidth = 8;
     ctx.strokeStyle = '#393';
 
-    const now = this.audioCtx.currentTime;
+    const elapsed = this.audioCtx.currentTime - this.startTimeS;
 
-    const currentMeasureNumber = Math.trunc(
-      (now - this.startTimeS) / (this.beatLengthS * 4));
-    const currentMeasureStart =
-      this.startTimeS + currentMeasureNumber * (this.beatLengthS * 4);
-
-    const currentFloatBeat = now - currentMeasureStart;
-    const currentBeat = Math.trunc(currentFloatBeat) + 1;
-    const currentFracBeat = currentFloatBeat - currentBeat + 1;
+    const currentBeatFrac = (elapsed / this.beatLengthS) % 1.0;
+    const currentBeatInt = Math.trunc(elapsed / this.beatLengthS);
+    const currentMeasureNumber = Math.trunc(currentBeatInt / 4);
+    const currentBeat = currentBeatInt % 4 + 1;
 
     const start = -Math.PI / 2;
 
     ctx.beginPath();
-    ctx.arc(50, 50, 20, start, start + Math.PI * 2 * currentFracBeat);
+    ctx.arc(50, 50, 20, start, start + Math.PI * 2 * currentBeatFrac);
     ctx.stroke();
 
     ctx.fillStyle = 'black';
-    ctx.fillText(currentBeat.toFixed(0), 20, 20);
+    ctx.fillText(`beat: ${currentBeat.toFixed(0)}`, 20, 20);
+    ctx.fillText(`measure: ${currentMeasureNumber.toFixed(0)}`, 20, 40);
+    ctx.fillText(`elapsed: ${elapsed.toFixed(3)}`, 20, 60);
 
     requestAnimationFrame(() => { this.render(); });
   }
