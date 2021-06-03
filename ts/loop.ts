@@ -228,10 +228,12 @@ export class Loop {
 
   private addCanvas() {
     const body = document.getElementsByTagName('body')[0];
+    const div = document.createElement('div');
+    body.appendChild(div);
     this.canvas = document.createElement('canvas');
     this.canvas.width = 800;
     this.canvas.height = 50;
-    body.appendChild(this.canvas);
+    div.appendChild(this.canvas);
 
     this.renderCanvas();
   }
