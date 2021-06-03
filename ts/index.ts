@@ -20,10 +20,9 @@ async function go() {
       case 'Space':
         console.log(`Space @ ${a.audioCtx.currentTime}`);
         if (isRecording) {
-          l.stopRecording(a.audioCtx.currentTime);
+          l.stopRecording(lm.getNearestDownbeat(a.audioCtx.currentTime));
           lm.addLoop(l);
           recentlyCompletedLoop = l;
-          l = l.nextLoop();
           isRecording = false;
         } else {
           l.startRecording(a.audioCtx.currentTime);

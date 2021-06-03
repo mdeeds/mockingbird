@@ -37,6 +37,18 @@ export class LoopManager {
     body.appendChild(this.canvas);
   }
 
+  private overdub(loop: Loop) {
+    const currentAudioTime = this.audioCtx.currentTime;
+    const beatAudioTime = this.getNearestDownbeat(currentAudioTime);
+    const nextLoop = loop.nextLoop();
+    nextLoop.startRecording(beatAudioTime);
+    const delayS = loop.getBodyS() + beatAudioTime - currentAudioTime;
+    setTimeout(() => {
+      nextLoop.stopRecording(beatAudioTime + loop.getBodyS());
+      this.addLoop(nextLoop);
+    }, delayS * 1000);
+  }
+
   addLoop(loop: Loop) {
     console.log(`Adding loop; playing: ${this.playingLoops.length}`);
     if (this.loops.length == 0) {
@@ -49,6 +61,7 @@ export class LoopManager {
     } else {
       this.startAtNearestDownbeat(loop);
     }
+    this.overdub(loop);
     this.loops.push(loop);
   }
 
