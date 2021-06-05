@@ -1,4 +1,3 @@
-import { request } from "http";
 import { Audio } from "./audio";
 
 type SampleSourceResolution = (self: SampleSource) => void;
@@ -9,7 +8,7 @@ export class SampleSource {
   private mediaRecorder: MediaRecorder;
   private firstChunkSize: number = 0;
   private firstChunk: Blob = null;
-  private listener: SampleCallback = null;
+  private listeners = new Map<Object, SampleCallback>();
   readonly audioCtx: AudioContext;
   readonly audio: Audio;
 
@@ -35,8 +34,12 @@ export class SampleSource {
     });
   }
 
-  public setListener(callback: SampleCallback) {
-    this.listener = callback;
+  public addListener(source: Object, callback: SampleCallback) {
+    this.listeners.set(source, callback);
+  }
+
+  public removeListener(source: Object) {
+    this.listeners.delete(source);
   }
 
   private setUpAnalyser(mediaSource: MediaStreamAudioSourceNode) {
@@ -130,8 +133,10 @@ export class SampleSource {
           // TODO: Consider supporting stereo or more channels.
           let newSamples = decodedSamples.getChannelData(0)
             .slice(this.firstChunkSize, decodedSamples.length);
-          if (this.listener && newSamples.length > 0) {
-            setTimeout(() => { this.listener(newSamples, chunkEndTime); }, 0);
+          if (newSamples.length > 0) {
+            for (const listener of this.listeners.values()) {
+              setTimeout(() => { listener(newSamples, chunkEndTime); }, 0);
+            }
           }
           if (this.firstChunkSize == 0) {
             this.firstChunkSize = decodedSamples.length;

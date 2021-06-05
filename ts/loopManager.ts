@@ -1,7 +1,7 @@
 import { Audio } from "./audio";
 import { Loop } from "./loop";
 
-type loopMode = 'overdub' | 'oneshot' | 'loop';
+type LoopMode = 'standby' | 'recording' | 'playing';
 
 class PlayingLoop {
   public readonly loop: Loop;
@@ -16,6 +16,7 @@ export class LoopManager {
   private audio: Audio;
   readonly audioCtx: AudioContext;
   private loops: Loop[] = [];
+  private loopLengthS: number;
   private beatLengthS: number;
   private startTimeS: number;
 
@@ -39,7 +40,7 @@ export class LoopManager {
 
   private overdub(loop: Loop) {
     const currentAudioTime = this.audioCtx.currentTime;
-    const beatAudioTime = this.getNearestDownbeat(currentAudioTime);
+    const beatAudioTime = this.getNextLoopStart(currentAudioTime);
     const nextLoop = loop.nextLoop();
     nextLoop.startRecording(beatAudioTime);
     const delayS = loop.getBodyS() + beatAudioTime - currentAudioTime;
@@ -71,31 +72,33 @@ export class LoopManager {
   }
 
   private setTempo(durationS: number) {
-    this.beatLengthS = durationS;
-    while (this.beatLengthS < 0.5) {
-      this.beatLengthS *= 2;
+    this.loopLengthS = durationS;
+    let beatLengthS = durationS;
+    while (beatLengthS < 0.5) {
+      beatLengthS *= 2;
     }
-    while (this.beatLengthS > 1.0) {
-      this.beatLengthS /= 2;
+    while (beatLengthS > 1.0) {
+      beatLengthS /= 2;
     }
-    console.log(`Beats per minute: ${60 / this.beatLengthS}`);
+    this.beatLengthS = beatLengthS;
+    console.log(`Beats per minute: ${60 / beatLengthS}`);
   }
 
-  public getNearestDownbeat(timestamp: number): number {
-    if (!this.beatLengthS) {
+  // TODO: This does not handle changing loop length.
+  public getNextLoopStart(timestamp: number): number {
+    if (!this.loopLengthS) {
       return timestamp;
     }
     const elapsed = timestamp - this.startTimeS;
-    const currentMeasureNumber = Math.round(
-      elapsed / (this.beatLengthS * 4));
-    const currentMeasureStart =
-      this.startTimeS + currentMeasureNumber * (this.beatLengthS * 4);
-    return currentMeasureStart;
+    // Playback: |--- Loop 0 ---|--- Loop 1 ---|---
+    // NextLoop     ^     Loop 1   ^    Loop 2    ^
+    const nextLoopNumber = Math.trunc(1 + (elapsed - 0.5) / this.loopLengthS);
+    return this.loopLengthS * nextLoopNumber;
   }
 
   private startAtNearestDownbeat(loop: Loop,
     timestamp: number = this.audioCtx.currentTime) {
-    const currentMeasureStart = this.getNearestDownbeat(timestamp);
+    const currentMeasureStart = this.getNextLoopStart(timestamp);
     this.start(loop, currentMeasureStart);
   }
 
@@ -137,7 +140,7 @@ export class LoopManager {
       this.scheduledThroughS + LoopManager.scheduleAheadS;
 
     for (const pl of this.playingLoops) {
-      const nextScheduleTime = this.getNearestDownbeat(
+      const nextScheduleTime = this.getNextLoopStart(
         pl.startTimeS + pl.loop.getBodyS());
       if (nextScheduleTime > this.scheduledThroughS &&
         nextScheduleTime <= nextScheduleThroughS) {

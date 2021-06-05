@@ -31,13 +31,15 @@ export class Loop {
   constructor(sampleSource: SampleSource) {
     this.sampleSource = sampleSource;
     this.audioCtx = sampleSource.audioCtx;
-    this.sampleSource.setListener((samples: Float32Array, endTimeS: number) => {
-      this.handleSamples(samples, endTimeS);
-    });
+    this.sampleSource.addListener(this,
+      (samples: Float32Array, endTimeS: number) => {
+        this.handleSamples(samples, endTimeS);
+      });
   }
 
   nextLoop(): Loop {
     const result = new Loop(this.sampleSource);
+    result.sampleStartS = this.sampleStartS;
     for (const s of this.sampleList) {
       result.rollSamples(s);
     }
@@ -136,6 +138,7 @@ export class Loop {
     for (let i = 0; i < this.sampleList.length; ++i) {
       this.fillFromSamples(i);
     }
+    this.sampleSource.removeListener(this);
     this.isFinalized = true;
   }
 
@@ -184,7 +187,7 @@ export class Loop {
   }
 
   private renderCanvas() {
-    const pixelsPerSecond = 1000 / 8;
+    const pixelsPerSecond = 1000 / 4;
     const secondsPerPixel = 1 / pixelsPerSecond;
     const samplesPerPixel = this.audioCtx.sampleRate * secondsPerPixel;
 
