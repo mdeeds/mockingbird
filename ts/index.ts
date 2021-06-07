@@ -29,26 +29,6 @@ async function go() {
         console.log(`Space @ ${a.audioCtx.currentTime}`);
         lm.nextMode();
         break;
-      case 'ArrowRight':
-        if (recentlyCompletedLoop) {
-          if (changeRate > 0) {
-            changeRate = Math.min(changeRate * 2, 0.05);
-          } else {
-            changeRate *= -0.5;
-          }
-          recentlyCompletedLoop.adjustStartPoint(changeRate);
-        }
-        break;
-      case 'ArrowLeft':
-        if (recentlyCompletedLoop) {
-          if (changeRate < 0) {
-            changeRate = Math.max(changeRate * 2, -0.05);
-          } else {
-            changeRate *= -0.5;
-          }
-          recentlyCompletedLoop.adjustStartPoint(changeRate);
-        }
-        break;
     }
   });
 }

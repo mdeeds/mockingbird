@@ -24,7 +24,7 @@ export class LoopManager {
 
   // Scheduling state
   private scheduledThroughS: number;
-  private static scheduleAheadS: number = 1.5;
+  private static scheduleAheadS: number = 0.5;
   private playingLoops: PlayingLoop[] = [];
   private loopMode: LoopMode = 'waiting';
   private nextLoopStartS: number;

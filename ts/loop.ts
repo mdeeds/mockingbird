@@ -11,6 +11,7 @@ export class Loop {
   // State data
   private recordUntil: number = 0;
   private isFinalized: boolean = false;
+  private isMuted: boolean = false;
 
   // Sample data
   private sampleStartS: number;
@@ -68,7 +69,7 @@ export class Loop {
   }
 
   startRecording(timestamp: number) {
-    Log.info(`startRecording @ ${this.audioCtx.currentTime}`);
+    Log.info(`startRecording: ?? ${(this.audioCtx.currentTime - timestamp).toFixed(3)}`);
     if (this.recordUntil > 0) {
       throw new Error("Already recording.");
     }
@@ -119,12 +120,16 @@ export class Loop {
   }
 
   startSample(timestamp: number) {
-    Log.info(`Start sample: ${this.maxOfArray(this.audioBuffer.getChannelData(0))}`);
+    if (this.isMuted) {
+      Log.info(`Muted.`);
+      return;
+    }
     const currentTime = this.audioCtx.currentTime;
     this.source = this.audioCtx.createBufferSource();
     this.source.buffer = this.audioBuffer;
     this.source.connect(this.audioCtx.destination);
     const determinant = (timestamp - this.headerS) - currentTime;
+    Log.info(`Start sample det: ${determinant}`);
     if (determinant >= 0) {
       // Start is in the future.
       this.source.start(timestamp - this.headerS);
@@ -187,6 +192,30 @@ export class Loop {
     }
   }
 
+  private getPeaks(samplesPerPixel: number): number[] {
+    const result: number[] = [];
+    const buffer = this.audioBuffer.getChannelData(0);
+
+    let i = Math.round(this.headerS * this.audioCtx.sampleRate);
+    let m = 0;
+    for (let x = 0; x < this.canvas.width; ++x) {
+      result.push(m);
+      if (typeof m != 'number') {
+        throw new Error('BADNESS!');
+      }
+      const nextI = i + samplesPerPixel;
+      m = 0;
+      while (i < nextI) {
+        m = Math.max(m,
+          Math.pow(
+            Math.abs(buffer[i]), 0.5));
+        ++i
+      }
+    }
+
+    return result;
+  }
+
   private renderCanvas() {
     const pixelsPerSecond = 1000 / 4;
     const secondsPerPixel = 1 / pixelsPerSecond;
@@ -197,24 +226,16 @@ export class Loop {
     ctx.fillStyle = 'blue';
     ctx.strokeStyle = 'white';
     ctx.lineWidth = 0.5;
+    const peaks = this.getPeaks(samplesPerPixel);
     ctx.beginPath();
     ctx.moveTo(0, 25);
-    const buffer = this.audioBuffer.getChannelData(0);
 
-    let i = Math.round(this.headerS * this.audioCtx.sampleRate);
-    let m = 0;
-    for (let x = 0; x < this.canvas.width; ++x) {
-      ctx.lineTo(x, 25 + 25 * m);
-      const nextI = i + samplesPerPixel;
-      m = 0;
-      while (i < nextI) {
-        m = Math.max(m,
-          Math.pow(
-            Math.abs(buffer[i]), 0.5));
-        ++i
-      }
+    for (let x = 0; x < peaks.length; ++x) {
+      ctx.lineTo(x, 25 + 25 * peaks[x]);
     }
-    ctx.lineTo(0, 25);
+    for (let x = peaks.length - 1; x >= 0; --x) {
+      ctx.lineTo(x, 25 - 25 * peaks[x]);
+    }
     ctx.fill();
     ctx.stroke();
 
@@ -230,14 +251,51 @@ export class Loop {
     ctx.fillText(`${(this.offsetS * 1000).toFixed(0)}ms`, 5, 20);
   }
 
+  static changeRate: number = 0.001;
+
+  private handleKey(ev: KeyboardEvent) {
+    switch (ev.code) {
+      case 'ArrowRight':
+        if (Loop.changeRate > 0) {
+          Loop.changeRate = Math.min(Loop.changeRate * 2, 0.05);
+        } else {
+          Loop.changeRate *= -0.5;
+        }
+        this.adjustStartPoint(Loop.changeRate);
+        break;
+      case 'ArrowLeft':
+        if (Loop.changeRate < 0) {
+          Loop.changeRate = Math.max(Loop.changeRate * 2, -0.05);
+        } else {
+          Loop.changeRate *= -0.5;
+        }
+        this.adjustStartPoint(Loop.changeRate);
+        break;
+    }
+  }
+
   public addCanvas() {
     const body = document.getElementsByTagName('body')[0];
     const div = document.createElement('div');
+    // div.addEventListener('click', () => { div.focus(); });
+    div.addEventListener('touchstart', () => {
+      div.focus();
+      this.isMuted = !this.isMuted;
+      if (this.isMuted) {
+        div.classList.add('muted');
+      } else {
+        div.classList.remove('muted');
+      }
+    });
+    div.addEventListener('keydown', (ev) => { this.handleKey(ev); });
+    div.classList.add('loopContainer');
+    div.tabIndex = 0;
     body.appendChild(div);
     this.canvas = document.createElement('canvas');
     this.canvas.width = 800;
     this.canvas.height = 50;
     div.appendChild(this.canvas);
+    div.focus();
 
     this.renderCanvas();
   }
