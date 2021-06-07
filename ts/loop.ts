@@ -1,3 +1,4 @@
+import { Log } from "./Log";
 import { SampleSource } from "./sampleSource";
 
 export class Loop {
@@ -67,7 +68,7 @@ export class Loop {
   }
 
   startRecording(timestamp: number) {
-    console.log(`startRecording @ ${this.audioCtx.currentTime}`);
+    Log.info(`startRecording @ ${this.audioCtx.currentTime}`);
     if (this.recordUntil > 0) {
       throw new Error("Already recording.");
     }
@@ -95,7 +96,7 @@ export class Loop {
   }
 
   stopRecording(timestamp: number) {
-    console.log(`Stop recording; sample list length: ${this.sampleList.length}`);
+    Log.info(`Stop recording; sample list length: ${this.sampleList.length}`);
     if (this.isFinalized) {
       throw new Error("Already finalized");
     }
@@ -115,11 +116,10 @@ export class Loop {
     for (let i = 0; i < this.sampleList.length; ++i) {
       this.fillFromSamples(i);
     }
-    this.addCanvas();
   }
 
   startSample(timestamp: number) {
-    console.log(`Start sample: ${this.maxOfArray(this.audioBuffer.getChannelData(0))}`);
+    Log.info(`Start sample: ${this.maxOfArray(this.audioBuffer.getChannelData(0))}`);
     const currentTime = this.audioCtx.currentTime;
     this.source = this.audioCtx.createBufferSource();
     this.source.buffer = this.audioBuffer;
@@ -135,6 +135,7 @@ export class Loop {
   }
 
   finalize() {
+    Log.info("Finalize");
     for (let i = 0; i < this.sampleList.length; ++i) {
       this.fillFromSamples(i);
     }
@@ -229,7 +230,7 @@ export class Loop {
     ctx.fillText(`${(this.offsetS * 1000).toFixed(0)}ms`, 5, 20);
   }
 
-  private addCanvas() {
+  public addCanvas() {
     const body = document.getElementsByTagName('body')[0];
     const div = document.createElement('div');
     body.appendChild(div);

@@ -1,7 +1,8 @@
 import { Audio } from "./audio";
+import { Log } from "./Log";
 import { Loop } from "./loop";
 
-type LoopMode = 'standby' | 'recording' | 'playing';
+type LoopMode = 'waiting' | 'initial' | 'overdub' | 'play';
 
 class PlayingLoop {
   public readonly loop: Loop;
@@ -15,6 +16,7 @@ class PlayingLoop {
 export class LoopManager {
   private audio: Audio;
   readonly audioCtx: AudioContext;
+  private curentLoop: Loop;
   private loops: Loop[] = [];
   private loopLengthS: number;
   private beatLengthS: number;
@@ -24,12 +26,15 @@ export class LoopManager {
   private scheduledThroughS: number;
   private static scheduleAheadS: number = 1.5;
   private playingLoops: PlayingLoop[] = [];
+  private loopMode: LoopMode = 'waiting';
+  private nextLoopStartS: number;
 
   // Rendering
   private canvas: HTMLCanvasElement;
 
-  constructor(audio: Audio) {
+  constructor(audio: Audio, firstLoop: Loop) {
     this.audio = audio;
+    this.curentLoop = firstLoop;
     this.audioCtx = audio.audioCtx;
     this.canvas = document.createElement('canvas');
     this.canvas.width = 100;
@@ -38,37 +43,46 @@ export class LoopManager {
     body.appendChild(this.canvas);
   }
 
-  private overdub(loop: Loop) {
-    const currentAudioTime = this.audioCtx.currentTime;
-    const beatAudioTime = this.getNextLoopStart(currentAudioTime);
-    const nextLoop = loop.nextLoop();
-    nextLoop.startRecording(beatAudioTime);
-    const delayS = loop.getBodyS() + beatAudioTime - currentAudioTime;
-    setTimeout(() => {
-      nextLoop.stopRecording(beatAudioTime + loop.getBodyS());
-      this.addLoop(nextLoop);
-    }, delayS * 1000);
-  }
-
-  addLoop(loop: Loop) {
-    console.log(`Adding loop; playing: ${this.playingLoops.length}`);
-    if (this.loops.length == 0) {
-      this.setTempo(loop.getBodyS());
-      this.startTimeS = this.audioCtx.currentTime;
-      this.scheduledThroughS = this.audioCtx.currentTime;
-      this.start(loop, this.startTimeS);
-      this.schedule();
-      this.render();
-    } else {
-      this.startAtNearestDownbeat(loop);
+  public nextMode() {
+    switch (this.loopMode) {
+      case 'waiting':
+        Log.info('Start.');
+        this.curentLoop.startRecording(this.audioCtx.currentTime);
+        this.loopMode = 'initial';
+        break;
+      case 'initial':
+        const nowTime = this.audioCtx.currentTime;
+        Log.info('Captured.');
+        this.curentLoop.stopRecording(nowTime);
+        this.addFirstLoop(this.curentLoop);
+        this.nextLoopStartS = nowTime + this.curentLoop.getBodyS();
+        this.curentLoop.addCanvas();
+        this.curentLoop = this.curentLoop.nextLoop();
+        this.curentLoop.startRecording(nowTime);
+        this.loopMode = 'play';
+        break;
+      case 'play':
+        this.loopMode = 'overdub';
+        break;
+      case 'overdub':
+        this.loopMode = 'play';
+        break;
     }
-    this.overdub(loop);
-    this.loops.push(loop);
   }
 
-  private start(loop: Loop, startTimeS: number) {
-    this.playingLoops.push(new PlayingLoop(loop, startTimeS));
-    loop.startSample(startTimeS);
+  private addFirstLoop(loop: Loop) {
+    const nowTimeS = this.audioCtx.currentTime;
+    if (this.loops.length > 0) {
+      throw new Error('Already started playing.');
+    }
+    Log.info(`Adding loop; playing: ${this.playingLoops.length}`);
+    this.setTempo(loop.getBodyS());
+    this.startTimeS = nowTimeS;
+    this.scheduledThroughS = nowTimeS;
+    loop.startSample(this.startTimeS);
+    this.schedule();
+    this.render();
+    this.loops.push(loop);
   }
 
   private setTempo(durationS: number) {
@@ -81,39 +95,31 @@ export class LoopManager {
       beatLengthS /= 2;
     }
     this.beatLengthS = beatLengthS;
-    console.log(`Beats per minute: ${60 / beatLengthS}`);
-  }
-
-  // TODO: This does not handle changing loop length.
-  public getNextLoopStart(timestamp: number): number {
-    if (!this.loopLengthS) {
-      return timestamp;
-    }
-    const elapsed = timestamp - this.startTimeS;
-    // Playback: |--- Loop 0 ---|--- Loop 1 ---|---
-    // NextLoop     ^     Loop 1   ^    Loop 2    ^
-    const nextLoopNumber = Math.trunc(1 + (elapsed - 0.5) / this.loopLengthS);
-    return this.loopLengthS * nextLoopNumber;
-  }
-
-  private startAtNearestDownbeat(loop: Loop,
-    timestamp: number = this.audioCtx.currentTime) {
-    const currentMeasureStart = this.getNextLoopStart(timestamp);
-    this.start(loop, currentMeasureStart);
+    Log.info(`Beats per minute: ${60 / beatLengthS}`);
   }
 
   private render() {
-    const ctx = this.canvas.getContext('2d');
-    ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-    ctx.lineWidth = 8;
-    ctx.strokeStyle = '#393';
-
     const elapsed = this.audioCtx.currentTime - this.startTimeS;
-
     const currentBeatFrac = (elapsed / this.beatLengthS) % 1.0;
     const currentBeatInt = Math.trunc(elapsed / this.beatLengthS);
     const currentMeasureNumber = Math.trunc(currentBeatInt / 4);
     const currentBeat = currentBeatInt % 4 + 1;
+    const isOnBeat = currentBeatFrac < 0.5;
+
+    const ctx = this.canvas.getContext('2d');
+    ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    ctx.lineWidth = 8;
+
+    if (this.loopMode == 'overdub') {
+      ctx.strokeStyle = '#933';
+    } else if (this.loopMode == 'play') {
+      ctx.strokeStyle = '#393';
+    }
+    ctx.beginPath();
+    ctx.arc(50, 50, 45, -Math.PI, Math.PI);
+    ctx.stroke();
+
+    ctx.strokeStyle = '#393';
 
     const start = -Math.PI / 2;
 
@@ -129,8 +135,24 @@ export class LoopManager {
     requestAnimationFrame(() => { this.render(); });
   }
 
+  // Called at beginning of each loop from Schedule.
+  // Adds current loop to loops if in overdub mode.
+  // Starts a new loop recording.
+  private onTopOfLoop(audioTimstampS: number) {
+    Log.info('Top of loop...');
+    this.curentLoop.stopRecording(audioTimstampS);
+    if (this.loopMode === 'overdub') {
+      this.loops.push(this.curentLoop);
+      this.curentLoop.addCanvas();
+      this.loopMode = 'play';
+    }
+    this.curentLoop = this.curentLoop.nextLoop();
+    this.curentLoop.startRecording(audioTimstampS);
+  }
+
   private schedule() {
-    if (this.audioCtx.currentTime + LoopManager.scheduleAheadS < this.scheduledThroughS) {
+    if (this.audioCtx.currentTime + LoopManager.scheduleAheadS <
+      this.scheduledThroughS) {
       // Nothing to do.  We are scheduled up through our schedule ahead buffer.
       setTimeout(() => { this.schedule(); }, 100);
       return;
@@ -139,24 +161,13 @@ export class LoopManager {
     const nextScheduleThroughS =
       this.scheduledThroughS + LoopManager.scheduleAheadS;
 
-    for (const pl of this.playingLoops) {
-      const nextScheduleTime = this.getNextLoopStart(
-        pl.startTimeS + pl.loop.getBodyS());
-      if (nextScheduleTime > this.scheduledThroughS &&
-        nextScheduleTime <= nextScheduleThroughS) {
-        this.start(pl.loop, nextScheduleTime);
+    if (this.audioCtx.currentTime + LoopManager.scheduleAheadS >
+      this.nextLoopStartS) {
+      this.onTopOfLoop(this.nextLoopStartS);
+      for (const l of this.loops) {
+        l.startSample(this.nextLoopStartS);
       }
-    }
-
-    while (this.playingLoops.length > 0) {
-      const playingLoop = this.playingLoops[0];
-      const loopEndTime =
-        playingLoop.startTimeS + playingLoop.loop.getPlayLengthS();
-      if (loopEndTime < this.audioCtx.currentTime) {
-        this.playingLoops.shift();
-      } else {
-        break;
-      }
+      this.nextLoopStartS += this.loopLengthS;
     }
 
     this.scheduledThroughS = nextScheduleThroughS;

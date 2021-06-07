@@ -10,31 +10,22 @@ async function go() {
 
   let recentlyCompletedLoop = null;
 
-  const lm = new LoopManager(a);
+  const lm = new LoopManager(a, l);
 
   const body = document.getElementsByTagName('body')[0];
-  let isRecording = false;
   let changeRate = 0;
   body.addEventListener('keydown', (ev: KeyboardEvent) => {
     switch (ev.code) {
       case 'Space':
         console.log(`Space @ ${a.audioCtx.currentTime}`);
-        if (isRecording) {
-          l.stopRecording(lm.getNextLoopStart(a.audioCtx.currentTime));
-          lm.addLoop(l);
-          recentlyCompletedLoop = l;
-          isRecording = false;
-        } else {
-          l.startRecording(a.audioCtx.currentTime);
-          isRecording = true;
-        }
+        lm.nextMode();
         break;
       case 'ArrowRight':
         if (recentlyCompletedLoop) {
           if (changeRate > 0) {
             changeRate = Math.min(changeRate * 2, 0.05);
           } else {
-            changeRate = 0.001;
+            changeRate *= -0.5;
           }
           recentlyCompletedLoop.adjustStartPoint(changeRate);
         }
@@ -44,7 +35,7 @@ async function go() {
           if (changeRate < 0) {
             changeRate = Math.max(changeRate * 2, -0.05);
           } else {
-            changeRate = -0.001;
+            changeRate *= -0.5;
           }
           recentlyCompletedLoop.adjustStartPoint(changeRate);
         }
