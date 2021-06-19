@@ -1,9 +1,11 @@
+import { time } from "console";
 import { Log } from "./Log";
+import { LoopViz } from "./loopViz";
 import { SampleSource } from "./sampleSource";
 
 export class Loop {
-  private static maxHeaderS: number = 0.1;
-  private static maxFooterS: number = 0.1;
+  private static maxHeaderS: number = 0.5;
+  private static maxFooterS: number = 0.5;
 
   readonly audioCtx: AudioContext;
   private sampleSource: SampleSource;
@@ -29,6 +31,7 @@ export class Loop {
 
   // Visualization
   private canvas: HTMLCanvasElement;
+  private bpm: number = 90;
 
   constructor(sampleSource: SampleSource) {
     this.sampleSource = sampleSource;
@@ -69,7 +72,7 @@ export class Loop {
   }
 
   startRecording(timestamp: number) {
-    Log.info(`startRecording: ?? ${(this.audioCtx.currentTime - timestamp).toFixed(3)}`);
+    Log.info(`Start recording; sample list length: ${this.sampleList.length}`);
     if (this.recordUntil > 0) {
       throw new Error("Already recording.");
     }
@@ -128,15 +131,14 @@ export class Loop {
     this.source = this.audioCtx.createBufferSource();
     this.source.buffer = this.audioBuffer;
     this.source.connect(this.audioCtx.destination);
-    const determinant = (timestamp - this.headerS) - currentTime;
-    Log.info(`Start sample det: ${determinant}`);
-    if (determinant >= 0) {
-      // Start is in the future.
-      this.source.start(timestamp - this.headerS);
+    if (currentTime > timestamp) {
+      // We are already late.
+      const lateS = currentTime - timestamp;
+      this.source.start(currentTime, currentTime - timestamp);
     } else {
-      // Start is in the past.
-      this.source.start(currentTime, -determinant);
+      this.source.start(timestamp);
     }
+    this.source.stop(timestamp + this.bodyS);
   }
 
   finalize() {
@@ -144,6 +146,7 @@ export class Loop {
     for (let i = 0; i < this.sampleList.length; ++i) {
       this.fillFromSamples(i);
     }
+    // this.renderCanvas();
     this.sampleSource.removeListener(this);
     this.isFinalized = true;
   }
@@ -175,7 +178,7 @@ export class Loop {
 
   private handleSamples(samples: Float32Array, endTimeS: number) {
     const samplesLengthS = samples.length / this.audioCtx.sampleRate;
-    if (!this.sampleStartS) {
+    if (this.sampleList.length === 0) {
       this.sampleStartS = endTimeS - samplesLengthS;
     }
     if (this.recordUntil === 0) {
@@ -188,64 +191,24 @@ export class Loop {
         this.fillFromSamples(this.sampleList.length - 1);
       }
     } else if (!this.isFinalized) {
+      this.sampleList.push(samples);
+      this.sampleLengthS += samplesLengthS;
+      if (this.audioBuffer) {
+        this.fillFromSamples(this.sampleList.length - 1);
+      }
       this.finalize();
     }
   }
 
-  private getPeaks(samplesPerPixel: number): number[] {
-    const result: number[] = [];
-    const buffer = this.audioBuffer.getChannelData(0);
-
-    let i = Math.round(this.headerS * this.audioCtx.sampleRate);
-    let m = 0;
-    for (let x = 0; x < this.canvas.width; ++x) {
-      result.push(m);
-      if (typeof m != 'number') {
-        throw new Error('BADNESS!');
-      }
-      const nextI = i + samplesPerPixel;
-      m = 0;
-      while (i < nextI) {
-        m = Math.max(m,
-          Math.pow(
-            Math.abs(buffer[i]), 0.5));
-        ++i
-      }
+  private renderCanvas() {
+    if (!this.canvas) {
+      throw new Error('Render called before we have a canvas.');
     }
 
-    return result;
-  }
-
-  private renderCanvas() {
-    const pixelsPerSecond = 1000 / 4;
-    const secondsPerPixel = 1 / pixelsPerSecond;
-    const samplesPerPixel = this.audioCtx.sampleRate * secondsPerPixel;
+    LoopViz.render(this.audioBuffer.getChannelData(0),
+      this.audioCtx.sampleRate, this.bpm, this.headerS, this.canvas);
 
     const ctx = this.canvas.getContext('2d');
-    ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-    ctx.fillStyle = 'blue';
-    ctx.strokeStyle = 'white';
-    ctx.lineWidth = 0.5;
-    const peaks = this.getPeaks(samplesPerPixel);
-    ctx.beginPath();
-    ctx.moveTo(0, 25);
-
-    for (let x = 0; x < peaks.length; ++x) {
-      ctx.lineTo(x, 25 + 25 * peaks[x]);
-    }
-    for (let x = peaks.length - 1; x >= 0; --x) {
-      ctx.lineTo(x, 25 - 25 * peaks[x]);
-    }
-    ctx.fill();
-    ctx.stroke();
-
-    const bodyEndX = this.bodyS * pixelsPerSecond;
-    ctx.strokeStyle = 'black';
-    ctx.beginPath();
-    ctx.moveTo(bodyEndX, 0);
-    ctx.lineTo(bodyEndX, 50);
-    ctx.stroke();
-
     ctx.beginPath();
     ctx.fillStyle = 'black';
     ctx.fillText(`${(this.offsetS * 1000).toFixed(0)}ms`, 5, 20);
@@ -274,28 +237,30 @@ export class Loop {
     }
   }
 
-  public addCanvas() {
+  public addCanvas(bpm: number) {
+    this.bpm = bpm;
+    console.log(`BPM: ${bpm}`);
     const body = document.getElementsByTagName('body')[0];
-    const div = document.createElement('div');
+    const span = document.createElement('span');
     // div.addEventListener('click', () => { div.focus(); });
-    div.addEventListener('touchstart', () => {
-      div.focus();
+    span.addEventListener('touchstart', () => {
+      span.focus();
       this.isMuted = !this.isMuted;
       if (this.isMuted) {
-        div.classList.add('muted');
+        span.classList.add('muted');
       } else {
-        div.classList.remove('muted');
+        span.classList.remove('muted');
       }
     });
-    div.addEventListener('keydown', (ev) => { this.handleKey(ev); });
-    div.classList.add('loopContainer');
-    div.tabIndex = 0;
-    body.appendChild(div);
+    span.addEventListener('keydown', (ev) => { this.handleKey(ev); });
+    span.classList.add('loopContainer');
+    span.tabIndex = 0;
+    body.appendChild(span);
     this.canvas = document.createElement('canvas');
-    this.canvas.width = 800;
-    this.canvas.height = 50;
-    div.appendChild(this.canvas);
-    div.focus();
+    this.canvas.width = 100;
+    this.canvas.height = 100;
+    span.appendChild(this.canvas);
+    span.focus();
 
     this.renderCanvas();
   }

@@ -56,7 +56,7 @@ export class LoopManager {
         this.curentLoop.stopRecording(nowTime);
         this.addFirstLoop(this.curentLoop);
         this.nextLoopStartS = nowTime + this.curentLoop.getBodyS();
-        this.curentLoop.addCanvas();
+        this.curentLoop.addCanvas(60 / this.beatLengthS);
         this.curentLoop = this.curentLoop.nextLoop();
         this.curentLoop.startRecording(nowTime);
         this.loopMode = 'play';
@@ -143,7 +143,7 @@ export class LoopManager {
     this.curentLoop.stopRecording(audioTimstampS);
     if (this.loopMode === 'overdub') {
       this.loops.push(this.curentLoop);
-      this.curentLoop.addCanvas();
+      this.curentLoop.addCanvas(60 / this.beatLengthS);
       this.loopMode = 'play';
     }
     this.curentLoop = this.curentLoop.nextLoop();

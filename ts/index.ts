@@ -5,6 +5,7 @@ import { SampleSource } from "./sampleSource";
 
 async function go() {
   const body = document.getElementsByTagName('body')[0];
+
   const mm = document.createElement('div');
   const report = function () {
     const mem: any = window.performance['memory'];
@@ -18,11 +19,8 @@ async function go() {
   const s = await SampleSource.make(a);
   let l = new Loop(s);
 
-  let recentlyCompletedLoop = null;
-
   const lm = new LoopManager(a, l);
 
-  let changeRate = 0;
   body.addEventListener('keydown', (ev: KeyboardEvent) => {
     switch (ev.code) {
       case 'Space':
