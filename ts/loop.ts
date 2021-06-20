@@ -1,4 +1,3 @@
-import { time } from "console";
 import { Log } from "./Log";
 import { LoopViz } from "./loopViz";
 import { SampleSource } from "./sampleSource";
@@ -68,11 +67,16 @@ export class Loop {
   adjustStartPoint(deltaS: number) {
     this.headerS += deltaS;
     this.offsetS += deltaS;
+    if (this.headerS < 0) {
+      this.offsetS -= this.headerS;
+      this.headerS = 0;
+    }
+
     this.renderCanvas();
   }
 
   startRecording(timestamp: number) {
-    Log.info(`Start recording; sample list length: ${this.sampleList.length}`);
+    Log.debug(`Start recording; sample list length: ${this.sampleList.length}`);
     if (this.recordUntil > 0) {
       throw new Error("Already recording.");
     }
@@ -124,7 +128,6 @@ export class Loop {
 
   startSample(timestamp: number) {
     if (this.isMuted) {
-      Log.info(`Muted.`);
       return;
     }
     const currentTime = this.audioCtx.currentTime;
@@ -134,9 +137,10 @@ export class Loop {
     if (currentTime > timestamp) {
       // We are already late.
       const lateS = currentTime - timestamp;
-      this.source.start(currentTime, currentTime - timestamp);
+      this.source.start(currentTime,
+        currentTime - timestamp + this.headerS);
     } else {
-      this.source.start(timestamp);
+      this.source.start(timestamp, this.headerS);
     }
     this.source.stop(timestamp + this.bodyS);
   }

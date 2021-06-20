@@ -46,13 +46,13 @@ export class LoopManager {
   public nextMode() {
     switch (this.loopMode) {
       case 'waiting':
-        Log.info('Start.');
+        Log.debug('Start.');
         this.curentLoop.startRecording(this.audioCtx.currentTime);
         this.loopMode = 'initial';
         break;
       case 'initial':
         const nowTime = this.audioCtx.currentTime;
-        Log.info('Captured.');
+        Log.debug('Captured.');
         this.curentLoop.stopRecording(nowTime);
         this.addFirstLoop(this.curentLoop);
         this.nextLoopStartS = nowTime + this.curentLoop.getBodyS();
@@ -75,7 +75,7 @@ export class LoopManager {
     if (this.loops.length > 0) {
       throw new Error('Already started playing.');
     }
-    Log.info(`Adding loop; playing: ${this.playingLoops.length}`);
+    Log.debug(`Adding loop; playing: ${this.playingLoops.length}`);
     this.setTempo(loop.getBodyS());
     this.startTimeS = nowTimeS;
     this.scheduledThroughS = nowTimeS;
@@ -95,7 +95,7 @@ export class LoopManager {
       beatLengthS /= 2;
     }
     this.beatLengthS = beatLengthS;
-    Log.info(`Beats per minute: ${60 / beatLengthS}`);
+    Log.debug(`Beats per minute: ${60 / beatLengthS}`);
   }
 
   private render() {
@@ -139,12 +139,12 @@ export class LoopManager {
   // Adds current loop to loops if in overdub mode.
   // Starts a new loop recording.
   private onTopOfLoop(audioTimstampS: number) {
-    Log.info('Top of loop...');
+    Log.debug('Top of loop...');
     this.curentLoop.stopRecording(audioTimstampS);
     if (this.loopMode === 'overdub') {
       this.loops.push(this.curentLoop);
       this.curentLoop.addCanvas(60 / this.beatLengthS);
-      this.loopMode = 'play';
+      // this.loopMode = 'play';
     }
     this.curentLoop = this.curentLoop.nextLoop();
     this.curentLoop.startRecording(audioTimstampS);
