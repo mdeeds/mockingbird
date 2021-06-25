@@ -141,10 +141,10 @@ export class LoopManager {
   private onTopOfLoop(audioTimstampS: number) {
     Log.debug('Top of loop...');
     this.curentLoop.stopRecording(audioTimstampS);
-    if (this.loopMode === 'overdub') {
-      this.loops.push(this.curentLoop);
-      this.curentLoop.addCanvas(60 / this.beatLengthS);
-      // this.loopMode = 'play';
+    this.loops.push(this.curentLoop);
+    this.curentLoop.addCanvas(60 / this.beatLengthS);
+    if (this.loopMode === 'play') {
+      this.curentLoop.mute();
     }
     this.curentLoop = this.curentLoop.nextLoop();
     this.curentLoop.startRecording(audioTimstampS);
@@ -164,10 +164,18 @@ export class LoopManager {
     if (this.audioCtx.currentTime + LoopManager.scheduleAheadS >
       this.nextLoopStartS) {
       this.onTopOfLoop(this.nextLoopStartS);
+      const loopsToDelete: Loop[] = [];
       for (const l of this.loops) {
-        l.startSample(this.nextLoopStartS);
+        if (l.deleted()) {
+          loopsToDelete.push(l);
+        } else {
+          l.startSample(this.nextLoopStartS);
+        }
       }
       this.nextLoopStartS += this.loopLengthS;
+      for (const toDelete of loopsToDelete) {
+        this.loops.splice(this.loops.indexOf(toDelete), 1);
+      }
     }
 
     this.scheduledThroughS = nextScheduleThroughS;

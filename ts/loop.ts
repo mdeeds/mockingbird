@@ -13,6 +13,7 @@ export class Loop {
   private recordUntil: number = 0;
   private isFinalized: boolean = false;
   private isMuted: boolean = false;
+  private isDeleted: boolean = false;
 
   // Sample data
   private sampleStartS: number;
@@ -238,33 +239,52 @@ export class Loop {
         }
         this.adjustStartPoint(Loop.changeRate);
         break;
+      case 'Backspace':
+      case 'Delete':
+        this.mute();
+        this.audioBuffer = null;
+        this.sampleList = null;
+        this.span.remove();
+        this.isDeleted = true;
+        break;
     }
   }
+
+  public mute() {
+    this.isMuted = true;
+    this.span.classList.add('muted');
+  }
+
+  public deleted() {
+    return this.isDeleted;
+  }
+
+  private span: HTMLSpanElement;
 
   public addCanvas(bpm: number) {
     this.bpm = bpm;
     console.log(`BPM: ${bpm}`);
     const body = document.getElementsByTagName('body')[0];
-    const span = document.createElement('span');
+    this.span = document.createElement('span');
     // div.addEventListener('click', () => { div.focus(); });
-    span.addEventListener('touchstart', () => {
-      span.focus();
+    this.span.addEventListener('touchstart', () => {
+      this.span.focus();
       this.isMuted = !this.isMuted;
       if (this.isMuted) {
-        span.classList.add('muted');
+        this.span.classList.add('muted');
       } else {
-        span.classList.remove('muted');
+        this.span.classList.remove('muted');
       }
     });
-    span.addEventListener('keydown', (ev) => { this.handleKey(ev); });
-    span.classList.add('loopContainer');
-    span.tabIndex = 0;
-    body.appendChild(span);
+    this.span.addEventListener('keydown', (ev) => { this.handleKey(ev); });
+    this.span.classList.add('loopContainer');
+    this.span.tabIndex = 0;
+    body.appendChild(this.span);
     this.canvas = document.createElement('canvas');
     this.canvas.width = 100;
     this.canvas.height = 100;
-    span.appendChild(this.canvas);
-    span.focus();
+    this.span.appendChild(this.canvas);
+    this.span.focus();
 
     this.renderCanvas();
   }
