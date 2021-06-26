@@ -16,10 +16,10 @@ class PlayingLoop {
 export class LoopManager {
   private audio: Audio;
   readonly audioCtx: AudioContext;
-  private curentLoop: Loop;
+  private currentLoop: Loop;
   private loops: Loop[] = [];
   private loopLengthS: number;
-  private beatLengthS: number;
+  private beatLengthS: number = undefined;
   private startTimeS: number;
 
   // Scheduling state
@@ -34,40 +34,13 @@ export class LoopManager {
 
   constructor(audio: Audio, firstLoop: Loop) {
     this.audio = audio;
-    this.curentLoop = firstLoop;
+    this.currentLoop = firstLoop;
     this.audioCtx = audio.audioCtx;
     this.canvas = document.createElement('canvas');
     this.canvas.width = 100;
     this.canvas.height = 100;
     const body = document.getElementsByTagName('body')[0];
     body.appendChild(this.canvas);
-  }
-
-  public nextMode() {
-    switch (this.loopMode) {
-      case 'waiting':
-        Log.debug('Start.');
-        this.curentLoop.startRecording(this.audioCtx.currentTime);
-        this.loopMode = 'initial';
-        break;
-      case 'initial':
-        const nowTime = this.audioCtx.currentTime;
-        Log.debug('Captured.');
-        this.curentLoop.stopRecording(nowTime);
-        this.addFirstLoop(this.curentLoop);
-        this.nextLoopStartS = nowTime + this.curentLoop.getBodyS();
-        this.curentLoop.addCanvas(60 / this.beatLengthS);
-        this.curentLoop = this.curentLoop.nextLoop();
-        this.curentLoop.startRecording(nowTime);
-        this.loopMode = 'play';
-        break;
-      case 'play':
-        this.loopMode = 'overdub';
-        break;
-      case 'overdub':
-        this.loopMode = 'play';
-        break;
-    }
   }
 
   private addFirstLoop(loop: Loop) {
@@ -82,7 +55,53 @@ export class LoopManager {
     loop.startSample(this.startTimeS);
     this.schedule();
     this.render();
-    this.loops.push(loop);
+  }
+
+  private addGlue(a: Loop, b: Loop) {
+    const body = document.getElementsByTagName('body')[0];
+    const span = document.createElement('span');
+    span.innerText = 'glue';
+    span.classList.add('glue');
+    body.appendChild(span);
+  }
+
+  private startNextLoop(nowTime: number) {
+    this.currentLoop.stopRecording(nowTime);
+    if (!this.beatLengthS) {
+      this.addFirstLoop(this.currentLoop);
+    }
+    this.loops.push(this.currentLoop);
+    this.nextLoopStartS = nowTime + this.currentLoop.getBodyS();
+    this.currentLoop.addCanvas(60 / this.beatLengthS);
+    if (this.loopMode === 'play') {
+      this.currentLoop.mute();
+    }
+    const previousLoop = this.currentLoop;
+    this.currentLoop = this.currentLoop.nextLoop();
+    this.currentLoop.startRecording(nowTime);
+    this.addGlue(previousLoop, this.currentLoop);
+  }
+
+  public nextMode() {
+    switch (this.loopMode) {
+      case 'waiting':
+        Log.debug('Start.');
+        this.currentLoop.startRecording(this.audioCtx.currentTime);
+        this.loopMode = 'initial';
+        break;
+      case 'initial':
+        const nowTime = this.audioCtx.currentTime;
+        Log.debug('Captured.');
+        this.startNextLoop(nowTime);
+        this.loopMode = 'play';
+        break;
+      case 'play':
+        this.loopMode = 'overdub';
+        break;
+      case 'overdub':
+        this.loopMode = 'play';
+        break;
+    }
   }
 
   private setTempo(durationS: number) {
@@ -140,14 +159,7 @@ export class LoopManager {
   // Starts a new loop recording.
   private onTopOfLoop(audioTimstampS: number) {
     Log.debug('Top of loop...');
-    this.curentLoop.stopRecording(audioTimstampS);
-    this.loops.push(this.curentLoop);
-    this.curentLoop.addCanvas(60 / this.beatLengthS);
-    if (this.loopMode === 'play') {
-      this.curentLoop.mute();
-    }
-    this.curentLoop = this.curentLoop.nextLoop();
-    this.curentLoop.startRecording(audioTimstampS);
+    this.startNextLoop(audioTimstampS);
   }
 
   private schedule() {
