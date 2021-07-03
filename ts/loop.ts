@@ -147,7 +147,7 @@ export class Loop {
   }
 
   finalize() {
-    Log.info("Finalize");
+    Log.debug("Finalize");
     for (let i = 0; i < this.sampleList.length; ++i) {
       this.fillFromSamples(i);
     }
@@ -182,6 +182,7 @@ export class Loop {
   }
 
   private handleSamples(samples: Float32Array, endTimeS: number) {
+    Log.debug(`handleSamples: ${samples.length} @ ${endTimeS}`);
     const samplesLengthS = samples.length / this.audioCtx.sampleRate;
     if (this.sampleList.length === 0) {
       this.sampleStartS = endTimeS - samplesLengthS;
@@ -284,7 +285,6 @@ export class Loop {
     this.canvas.width = 100;
     this.canvas.height = 100;
     this.span.appendChild(this.canvas);
-    this.span.focus();
 
     this.renderCanvas();
   }

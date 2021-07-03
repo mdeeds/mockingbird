@@ -1,4 +1,5 @@
 import { Audio } from "./audio";
+import { Log } from "./Log";
 import { Loop } from "./loop";
 import { LoopManager } from "./loopManager";
 import { SampleSource } from "./sampleSource";
@@ -24,7 +25,7 @@ async function go() {
   body.addEventListener('keydown', (ev: KeyboardEvent) => {
     switch (ev.code) {
       case 'Space':
-        console.log(`Space @ ${a.audioCtx.currentTime}`);
+        Log.info(`Space @ ${a.audioCtx.currentTime}`);
         lm.nextMode();
         break;
     }

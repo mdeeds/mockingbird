@@ -5,7 +5,6 @@ type SampleCallback = (samples: Float32Array, endTimeS: number) => void;
 
 export class SampleSource {
   private mediaSource: MediaStreamAudioSourceNode;
-  private mediaRecorder: MediaRecorder;
   private firstChunkSize: number = 0;
   private firstChunk: Blob = null;
   private listeners = new Map<Object, SampleCallback>();
@@ -84,75 +83,29 @@ export class SampleSource {
     requestAnimationFrame(render);
   }
 
-  private handleStream(stream: MediaStream, resolve: SampleSourceResolution) {
+  private async handleStream(stream: MediaStream, resolve: SampleSourceResolution) {
     this.mediaSource = this.audioCtx.createMediaStreamSource(stream);
     this.setUpAnalyser(this.mediaSource);
 
+    await this.audioCtx.audioWorklet.addModule(
+      `sampleSourceWorker.js?buster=${Math.random().toFixed(6)}`);
+    const worklet = new AudioWorkletNode(this.audioCtx, 'sample-source');
 
-    var options = {
-      mimeType: "audio/webm;codecs=pcm",
+    let workerStartTime = this.audioCtx.currentTime;
+    let workerElapsedFrames = 0;
+
+    worklet.port.onmessage = (event) => {
+      for (const listener of this.listeners.values()) {
+        setTimeout(() => {
+          workerElapsedFrames += event.data.newSamples.length;
+          const chunkEndTime = workerStartTime +
+            workerElapsedFrames / this.audioCtx.sampleRate;
+          listener(event.data.newSamples, chunkEndTime);
+        }, 0);
+      }
     }
-    if (this.mediaRecorder) {
-      this.mediaRecorder.stop();
-    }
-    this.mediaRecorder = new MediaRecorder(stream, options);
-    this.mediaRecorder.onstart = (e) => {
-      console.log(`Media stream start ${stream.id}`);
-    };
 
-    this.mediaRecorder.onstop = (e: BlobEvent) => {
-      this.decodeChunk(e.data);
-      this.mediaRecorder = null;
-    };
-
-    this.mediaRecorder.ondataavailable = (e: BlobEvent) => {
-      this.decodeChunk(e.data);
-    };
-
-    this.mediaRecorder.start(/*timeslice=*/ 500 /*ms*/);
-    console.log(`Initialized @ ${this.audioCtx.currentTime}`);
+    this.mediaSource.connect(worklet);
     resolve(this);
-  }
-
-  private maxOfArray(a: Float32Array) {
-    let m = a[0];
-    for (const x of a) {
-      m = Math.max(m, x);
-    }
-    return m;
-  }
-
-  private decodeChunk(chunk: Blob) {
-    let chunkEndTime = this.audioCtx.currentTime;
-    let fileReader = new FileReader();
-    fileReader.onloadend = () => {
-      const encodedData: ArrayBuffer = fileReader.result as ArrayBuffer;
-      // console.log("Encoded length: " + encodedData.byteLength);
-      this.audioCtx.decodeAudioData(encodedData,
-        (decodedSamples) => {
-          // TODO: Consider supporting stereo or more channels.
-          let newSamples = decodedSamples.getChannelData(0)
-            .slice(this.firstChunkSize, decodedSamples.length);
-          if (newSamples.length > 0) {
-            for (const listener of this.listeners.values()) {
-              setTimeout(() => { listener(newSamples, chunkEndTime); }, 0);
-            }
-          }
-          if (this.firstChunkSize == 0) {
-            this.firstChunkSize = decodedSamples.length;
-          }
-        }, (er) => {
-          console.error(er);
-        });
-    };
-
-    let blob: Blob;
-    if (!this.firstChunk) {
-      this.firstChunk = chunk;
-      blob = new Blob([chunk], { 'type': chunk.type });
-    } else {
-      blob = new Blob([this.firstChunk, chunk], { 'type': chunk.type });
-    }
-    fileReader.readAsArrayBuffer(blob);
   }
 }

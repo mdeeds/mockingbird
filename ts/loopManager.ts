@@ -69,9 +69,9 @@ export class LoopManager {
     this.currentLoop.stopRecording(nowTime);
     if (!this.beatLengthS) {
       this.addFirstLoop(this.currentLoop);
+      Log.info(`First loop.  length: ${this.loopLengthS}`);
     }
     this.loops.push(this.currentLoop);
-    this.nextLoopStartS = nowTime + this.currentLoop.getBodyS();
     this.currentLoop.addCanvas(60 / this.beatLengthS);
     if (this.loopMode === 'play') {
       this.currentLoop.mute();
@@ -91,8 +91,10 @@ export class LoopManager {
         break;
       case 'initial':
         const nowTime = this.audioCtx.currentTime;
-        Log.debug('Captured.');
+        Log.debug(`Initial loop; now: ${nowTime}`)
         this.startNextLoop(nowTime);
+        this.nextLoopStartS = nowTime + this.loopLengthS;
+        Log.debug(`Initial loop; next: ${this.nextLoopStartS}`)
         this.loopMode = 'play';
         break;
       case 'play':
@@ -175,6 +177,7 @@ export class LoopManager {
 
     if (this.audioCtx.currentTime + LoopManager.scheduleAheadS >
       this.nextLoopStartS) {
+      Log.debug('Top of loop.');
       this.onTopOfLoop(this.nextLoopStartS);
       const loopsToDelete: Loop[] = [];
       for (const l of this.loops) {
@@ -185,6 +188,8 @@ export class LoopManager {
         }
       }
       this.nextLoopStartS += this.loopLengthS;
+      Log.debug(`Next: ${this.nextLoopStartS}; Len: ${this.loopLengthS}`)
+
       for (const toDelete of loopsToDelete) {
         this.loops.splice(this.loops.indexOf(toDelete), 1);
       }
